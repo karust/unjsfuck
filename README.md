@@ -1,5 +1,7 @@
 # UnJSFuck
+[![Go Report Card](https://goreportcard.com/badge/github.com/karust/openserp)](https://goreportcard.com/report/github.com/karust/openserp)
 <a href="https://github.com/karust/unjsfuck/actions"><img src="https://github.com/karust/unjsfuck/actions/workflows/build_tests.yml/badge.svg"/></a>
+[![codecov](https://codecov.io/gh/karust/unjsfuck/branch/main/graph/badge.svg?token=WJRP98YJCW)](https://codecov.io/gh/karust/unjsfuck)
 
 Encode/Decode [JSFuck](https://github.com/aemkei/jsfuck/) (0.5.0) obfuscated Javascript.
 
@@ -15,12 +17,12 @@ go install github.com/karust/unjsfuck
 
 ### Encode
 ```sh
-unjsfuck encode ./test/plain.js
+unjsfuck encode ./test/test_plain.js
 ```
 
 ### Decode
 ```sh
-unjsfuck decode ./test/enc.js
+unjsfuck decode ./test/test_enc.js
 ```
 
 ### Test

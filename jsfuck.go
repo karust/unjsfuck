@@ -113,7 +113,7 @@ func (jsFck *JSFuck) replaceMap() {
 			continue
 		}
 
-		// Replace all contructors till nothing's left
+		// Replace all constructors till nothing's left
 		original := ""
 		for value != original {
 			original = value

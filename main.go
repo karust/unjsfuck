@@ -67,7 +67,7 @@ func main() {
 	jsFuck.Init()
 
 	if err := rootCMD.Execute(); err != nil {
-		fmt.Printf("Errof occured during the execution: %v", err)
+		fmt.Printf("Errof occurred during the execution: %v", err)
 		os.Exit(1)
 	}
 }
