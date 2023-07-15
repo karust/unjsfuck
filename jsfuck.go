@@ -10,23 +10,18 @@ import (
 )
 
 type JSFuck struct {
-	JS string
+	MAPPING map[string]string
 }
 
-// Checks if passed some Javascript and if so assigns an instance variable
-// to that of the pass Javascript.
-// Populates MAPPING dictionary with the keys corresponding encoded value.
-// Keyword arguments:
-// js -- string containing the encoded Javascript to be
-//
-//	decoded (defualt None)
-func New(js string) (*JSFuck, error) {
+func New() *JSFuck {
+	jsFck := JSFuck{}
+	jsFck.MAPPING = make(map[string]string)
 
-	jsFck := JSFuck{
-		JS: js,
+	// Initialize local mapping from precalculated values
+	for k, v := range DEFAULT_MAPPING {
+		jsFck.MAPPING[k] = v
 	}
-
-	return &jsFck, nil
+	return &jsFck
 }
 
 func (jsFck *JSFuck) Init() {
@@ -36,49 +31,46 @@ func (jsFck *JSFuck) Init() {
 	jsFck.replaceStrings()
 }
 
-// Calculates 0-9`s encoded value and adds it to MAPPING
+func (jsFck *JSFuck) encodeDigit(digit int) string {
+	output := `+[]` //0
+
+	if digit > 0 {
+		output = `+!` + output
+	}
+
+	for i := 0; i < digit-1; i++ {
+		output = `+!+[]` + output
+	}
+
+	if digit > 1 {
+		output = output[1:]
+	}
+	return output
+}
+
+// Calculates encoded values for 0-9 and adds it to MAPPING
 func (jsFck *JSFuck) fillMissingDigits() {
-	for number := 0; number < 10; number++ {
-		output := `+[]`
-
-		if number > 0 {
-			output = `+!` + output
-		}
-
-		for i := 0; i < number-1; i++ {
-			output = `+!+[]` + output
-		}
-
-		if number > 1 {
-			output = output[1:]
-		}
-
-		MAPPING[strconv.Itoa(number)] = `[` + output + `]`
+	for number := 0; number <= 9; number++ {
+		jsFck.MAPPING[strconv.Itoa(number)] = `[` + jsFck.encodeDigit(number) + `]`
 	}
 }
 
 // Iterates over MAPPING and fills missing character values with a string
-// containing their ascii value represented in hex
+// containing their ASCII value represented in hex
 func (jsFck *JSFuck) fillMissingChars() {
-	// TODO: Remove ?
-	digitRgxp, _ := regexp.Compile(`\d+`)
-	letterRgxp, _ := regexp.Compile(`[^\d+]`)
+	digitRgxp := regexp.MustCompile(`\d+`)
+	letterRgxp := regexp.MustCompile(`[^\d+]`)
 
-	for key, value := range MAPPING {
+	for key, value := range jsFck.MAPPING {
 		if value == USE_CHAR_CODE {
 			hexidec := hex.EncodeToString([]byte{key[0]})
 
-			// TODO: Remove ?
+			// Separate HEX digit from letter
 			digitSearch := digitRgxp.FindString(hexidec)
 			letterSearch := letterRgxp.FindString(hexidec)
 
-			// digit, letter := "", ""
-			// if digit != ""
-			// digit = digit_search[0] if digit_search else ``
-			// letter = letter_search[0] if letter_search else ``
-
 			encodedString := fmt.Sprintf(`Function("return unescape")()("%%"+(%s)+"%s")`, digitSearch, letterSearch)
-			MAPPING[key] = encodedString
+			jsFck.MAPPING[key] = encodedString
 		}
 	}
 }
@@ -87,60 +79,60 @@ func (jsFck *JSFuck) fillMissingChars() {
 // found in CONSTRUCTORS and SIMPLE, as well as using digitalReplacer and
 // numberReplacer to replace numeric values
 func (jsFck *JSFuck) replaceMap() {
+
+	// Replaces found patterns in value with replacement
 	replace := func(pattern, replacement, value string) string {
 		re := regexp.MustCompile(pattern)
 		return re.ReplaceAllString(value, replacement)
 	}
 
+	// Replace found digit with encoded one
 	digitReplacer := func(x string) string {
 		re := regexp.MustCompile(`\d`)
-		return MAPPING[re.FindString(x)]
+		return jsFck.MAPPING[re.FindString(x)]
 	}
 
+	// Split number digits and encode
 	numberReplacer := func(number string) string {
-		values := strings.Split(number, "")
-		head, _ := strconv.Atoi(values[0])
-		output := `+[]`
+		digits := strings.Split(number, "")
+		firstDigit, _ := strconv.Atoi(digits[0])
 
-		values = values[1:]
+		// ?Keep implementation as in JSfuck
+		encoded := jsFck.encodeDigit(firstDigit)
+		concatenated := strings.Join(append([]string{encoded}, digits[1:]...), "+")
 
-		if head > 0 {
-			output = `+!` + output
-		}
-
-		for i := 1; i < head; i++ {
-			output = `+!+[]` + output
-		}
-
-		if head > 1 {
-			output = output[1:]
-		}
-
-		re := regexp.MustCompile(`(\d)`)
-		return re.ReplaceAllStringFunc(strings.Join(append([]string{output}, values...), "+"), digitReplacer)
+		re := regexp.MustCompile(`\d`)
+		return re.ReplaceAllStringFunc(concatenated, digitReplacer)
 	}
 
+	// For every declared char
 	for i := MIN; i <= MAX; i++ {
 		char := fmt.Sprintf("%c", i)
-		value, ok := MAPPING[char]
+		value, ok := jsFck.MAPPING[char]
 		if !ok || value == "" {
 			continue
 		}
 
-		for key, val := range CONSTRUCTORS {
-			if !strings.Contains(value, key) {
-				continue
+		// Replace all contructors till nothing's left
+		original := ""
+		for value != original {
+			original = value
+			for key, val := range CONSTRUCTORS {
+				if !strings.Contains(value, key) {
+					continue
+				}
+				value = replace(`\b`+key, val+`["constructor"]`, value)
 			}
-			value = replace(`\b`+key, val+`["constructor"]`, value)
+
+			for key, val := range SIMPLE {
+				if !strings.Contains(value, key) {
+					continue
+				}
+				value = replace(`\b`+key, val, value)
+			}
 		}
 
-		for key, val := range SIMPLE {
-			if !strings.Contains(value, key) {
-				continue
-			}
-			value = replace(`\b`+key, val, value)
-		}
-
+		// Replace all numbers and digits
 		re := regexp.MustCompile(`(\d\d+)`)
 		value = re.ReplaceAllStringFunc(value, numberReplacer)
 
@@ -150,18 +142,18 @@ func (jsFck *JSFuck) replaceMap() {
 		re = regexp.MustCompile(`\[(\d)\]`)
 		value = re.ReplaceAllStringFunc(value, digitReplacer)
 
+		// Replace GLOBAL and empty quotes
 		value = replace(`GLOBAL`, GLOBAL, value)
 		value = replace(`\+""`, `+[]`, value)
 		value = replace(`""`, `[]+[]`, value)
 
-		MAPPING[char] = value
+		jsFck.MAPPING[char] = value
 	}
 }
 
 // Replaces strings added in `replaceMap` with encoded there values
 func (jsFck *JSFuck) replaceStrings() {
-
-	// Function to split characters to correctly encode later
+	// Split characters to correctly encode later
 	mappingReplacer := func(b string) string {
 		b = b[1 : len(b)-1] // Remove quotes, can't get groups here
 		splitted := strings.Split(b, "")
@@ -169,9 +161,9 @@ func (jsFck *JSFuck) replaceStrings() {
 	}
 
 	// Replace content between quotes
-	for key, value := range MAPPING {
+	for key, value := range jsFck.MAPPING {
 		re := regexp.MustCompile(`\"([^\"]+)\"`)
-		MAPPING[key] = re.ReplaceAllStringFunc(value, mappingReplacer)
+		jsFck.MAPPING[key] = re.ReplaceAllStringFunc(value, mappingReplacer)
 	}
 
 	pattern := `[^\[\]\(\)\!\+]`
@@ -182,7 +174,7 @@ func (jsFck *JSFuck) replaceStrings() {
 		if _, ok := missing[c]; ok {
 			return c
 		} else {
-			return MAPPING[c]
+			return jsFck.MAPPING[c]
 		}
 	}
 
@@ -191,7 +183,7 @@ func (jsFck *JSFuck) replaceStrings() {
 		found = false
 		missing = make(map[string]string)
 
-		for key, value := range MAPPING {
+		for key, value := range jsFck.MAPPING {
 			if findNonEncodedRegexp.MatchString(value) {
 				missing[key] = value
 				found = true
@@ -199,52 +191,39 @@ func (jsFck *JSFuck) replaceStrings() {
 		}
 
 		for key := range missing {
-			value := MAPPING[key]
+			value := jsFck.MAPPING[key]
 			value = findNonEncodedRegexp.ReplaceAllStringFunc(value, valueReplacer)
 
-			MAPPING[key] = value
+			jsFck.MAPPING[key] = value
 			missing[key] = value
 		}
 	}
 }
 
-// Iterates over MAPPING and replaces every value found with
-// its corresponding key
-// Keyword arguments:
-// js -- string containing Javascript encoded with JSFuck
-// Returns:
-// js -- string of decoded Javascript
+// Iterates over jsFck.MAPPING and replaces every value found with its corresponding key
 func (jsFck *JSFuck) mapping(js string) string {
-	// Reverse sort MAP
-	keys := make([]string, 0, len(MAPPING))
-	for key := range MAPPING {
+	// Reverse sort MAP, so bigger encodings first
+	keys := make([]string, 0, len(jsFck.MAPPING))
+	for key := range jsFck.MAPPING {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool { return len(MAPPING[keys[i]]) > len(MAPPING[keys[j]]) })
+	sort.Slice(keys, func(i, j int) bool { return len(jsFck.MAPPING[keys[i]]) > len(jsFck.MAPPING[keys[j]]) })
 
+	// Replace values from big to small
 	for _, key := range keys {
-		value := MAPPING[key]
-		//fmt.Printf("%v%v\n", key, value)
+		value := jsFck.MAPPING[key]
 		js = strings.ReplaceAll(js, value, key)
 	}
 	return js
 }
 
 // Unevals a piece of Javascript wrapped with an encoded eval
-// Keyword arguments:
-// js -- string containing an eval wrapped string of Javascript
-// Returns:
-// js -- string with eval removed
 func (jsFck *JSFuck) uneval(js string) string {
 	js = strings.ReplaceAll(js, `[][flat][constructor](`, ``)
 	return js[:len(js)-3] // remove )()
 }
 
 // Decodes JSFuck`d Javascript
-// Keyword arguments:
-// js -- string containing the JSFuck to be decoded (defualt None)
-// Returns:
-// js -- string of decoded Javascript
 func (jsFck *JSFuck) Decode(js string) string {
 	js = jsFck.mapping(js)
 
@@ -261,11 +240,7 @@ func (jsFck *JSFuck) Decode(js string) string {
 	return js
 }
 
-// Encodes vanilla Javascript to JSFuck obfuscated Javascript
-// Keyword arguments:
-// js                            -- string of unobfuscated Javascript
-// wrapWithEval        -- boolean determines whether to wrap with an eval
-// runInParentScope -- boolean determines whether to run in parents scope
+// Encodes plain Javascript to JSFuck obfuscated Javascript
 func (jsFck *JSFuck) Encode(js string) string {
 
 	output := []string{}
@@ -277,11 +252,14 @@ func (jsFck *JSFuck) Encode(js string) string {
 	regex += "."
 
 	inputReplacer := func(c string) string {
+		if c == "\n" || c == "\r" {
+			return ""
+		}
 		replacement, ok := SIMPLE[c]
 		if ok {
 			output = append(output, "["+replacement+"]+[]")
 		} else {
-			replacement, ok = MAPPING[c]
+			replacement, ok = jsFck.MAPPING[c]
 			if ok {
 				output = append(output, replacement)
 			} else {
@@ -291,7 +269,7 @@ func (jsFck *JSFuck) Encode(js string) string {
 				)
 
 				output = append(output, replacement)
-				MAPPING[c] = replacement
+				jsFck.MAPPING[c] = replacement
 			}
 		}
 		return replacement
@@ -308,9 +286,9 @@ func (jsFck *JSFuck) Encode(js string) string {
 	return result
 }
 
-func (jsFck *JSFuck) Wrap(js string, wrapWithEval, runInParentScope bool) string {
-	if wrapWithEval {
-		if runInParentScope {
+func (jsFck *JSFuck) Wrap(js string, isWrapEval, isParentScope bool) string {
+	if isWrapEval {
+		if isParentScope {
 			js = "[][" + jsFck.Encode("flat") + "]" +
 				"[" + jsFck.Encode("constructor") + "]" +
 				"(" + jsFck.Encode("return eval") + ")()" +

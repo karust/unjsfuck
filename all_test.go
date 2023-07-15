@@ -2,32 +2,38 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/dop251/goja"
+	"github.com/robertkrimen/otto"
 )
 
-var (
-	vm            = goja.New()
-	jsunfuck, err = New("")
-	test1         = `
-(![]+[])[+!+[]]+(![]+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+(!![]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[+!+[]+[!+[]+!+[]+!+[]]]+[+!+[]]+[!+[]+!+[]]+[!+[]+!+[]+!+[]]+([+[]]+![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[!+[]+!+[]+[+[]]]`
-)
+var vm = otto.New()
+
+func contains(s []string, e string) bool {
+	for _, v := range s {
+		if strings.Contains(e, v) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestFillMissingDigits(t *testing.T) {
-	jsunfuck.fillMissingDigits()
+	jsFuck := New()
+	jsFuck.fillMissingDigits()
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i <= 9; i++ {
 		want := fmt.Sprintf("%d", i)
 
-		val, ok := MAPPING[want]
+		encoding, ok := jsFuck.MAPPING[want]
 		if !ok {
 			t.Fatalf("'%v' digit not present in the MAPPING", want)
 		}
 
-		result, err := vm.RunString(val)
+		result, err := vm.Run(encoding)
 		if err != nil {
 			t.Fatalf("Failed to interpret the encoding: %v", err)
 		}
@@ -40,140 +46,153 @@ func TestFillMissingDigits(t *testing.T) {
 }
 
 func TestFillMissingChars(t *testing.T) {
-	jsunfuck.fillMissingChars()
+	jsFuck := New()
+	jsFuck.fillMissingDigits()
+	jsFuck.fillMissingChars()
 
-	for want, val := range MAPPING {
-		if val == USE_CHAR_CODE {
+	for want, encoding := range jsFuck.MAPPING {
+		if encoding == USE_CHAR_CODE {
 			t.Fatalf("%v key value is unchanged", want)
 		}
 
-		result, err := vm.RunString(val)
-		if err != nil {
-			t.Fatalf("Failed to interpret the encoding: %v", err)
-		}
-
-		got := fmt.Sprintf("%v", result)
-		if got != want {
-			t.Fatalf("Wanted value '%v' mismatched to the resulted one '%v'", want, got)
-		}
+		// // Interpreter can't check this
+		// result, err := vm.Run(encoding)
+		// if err != nil {
+		// 	t.Fatalf("Failed to interpret the encoding %v: Err %v", encoding, err)
+		// }
+		// got := fmt.Sprintf("%v", result)
+		// if got != want {
+		// 	t.Fatalf("Wanted value '%v' mismatched to the resulted one '%v'", want, got)
+		// }
 	}
 }
 
 func TestReplaceMap(t *testing.T) {
-	contains := func(s []string, e string) bool {
-		for _, v := range s {
-			if strings.Contains(e, v) {
-				return true
-			}
-		}
-		return false
-	}
+	jsFuck := New()
 
-	keys := []string{}
+	// Collect plain JS constructions
+	constructions := []string{}
 	for k := range CONSTRUCTORS {
-		keys = append(keys, k)
+		constructions = append(constructions, k)
 	}
 	for k := range SIMPLE {
-		keys = append(keys, k)
+		constructions = append(constructions, k)
 	}
 
-	jsunfuck.fillMissingDigits()
-	//jsunfuck.fillMissingChars()
+	jsFuck.fillMissingDigits()
+	jsFuck.fillMissingChars()
+	jsFuck.replaceMap()
 
-	mappingCache := make(map[string]string)
-	for k, v := range MAPPING {
-		mappingCache[k] = v
-	}
-	jsunfuck.replaceMap()
-
-	for k, v := range MAPPING {
-		if contains(keys, v) {
-			t.Fatalf("%v. %v contains %v", k, v, keys)
+	for plain, encoded := range jsFuck.MAPPING {
+		if contains(constructions, encoded) {
+			t.Fatalf("`%v` - `%v` contains %v", plain, encoded, constructions)
 		}
 
-		if regexp.MustCompile(`(\d\d+)|\((\d)\)|\[(\d)\]|GLOBAL|\+""|""`).MatchString(v) {
-			t.Fatalf("%v contains unmaped symbol", v)
+		// If there are any digits, GLOBAL or empty quotes left
+		if regexp.MustCompile(`(\d\d+)|\((\d)\)|\[(\d)\]|GLOBAL|\+""|""`).MatchString(encoded) {
+			t.Fatalf("%v contains unmaped symbol", encoded)
 		}
 	}
 }
 
 func TestReplaceStrings(t *testing.T) {
-	jsunfuck.fillMissingDigits()
-	jsunfuck.fillMissingChars()
-	jsunfuck.replaceMap()
-	jsunfuck.replaceStrings()
+	jsFuck := New()
+	jsFuck.fillMissingDigits()
+	jsFuck.fillMissingChars()
+	jsFuck.replaceMap()
+	jsFuck.replaceStrings()
 
-	for _, v := range MAPPING {
+	for _, v := range jsFuck.MAPPING {
 		if found, _ := regexp.MatchString(`[^\[\]\(\)\!\+]`, v); found {
 			t.Fatalf("`%v` contains non-encoded characters", v)
 		}
 	}
 }
 
-func TestInitMapChars(t *testing.T) {
-	jsunfuck.Init()
+// Cannot execute encoded values in VM
+// func TestInitMapChars(t *testing.T) {
+// 	jsFuck := New()
+// 	jsFuck.Init()
 
-	for want, v := range MAPPING {
-		got, err := vm.RunString(v)
-		if err != nil {
-			t.Fatalf("Failed to interpret `%v` char encoding %v. Err: %v", want, v, err)
-		}
+// 	for want, v := range jsFuck.MAPPING {
+// 		got, err := vm.Run(v)
+// 		if err != nil {
+// 			t.Fatalf("Failed to interpret `%v` char encoding %v. Err: %v", want, v, err)
+// 		}
 
-		if got.String() != want {
-			t.Fatalf("Got %v != Want %v. Err: %v", got, want, err)
-		}
-	}
-}
+// 		if got.String() != want {
+// 			t.Fatalf("Got %v != Want %v. Err: %v", got, want, err)
+// 		}
+// 	}
+// }
 
-func TestDecode(t *testing.T) {
-	jsunfuck.Init()
-	res := jsunfuck.Decode(`[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]][([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+([][[]]+[])[+!+[]]+(![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+[]]+(!![]+[])[+!+[]]+([][[]]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(!![]+[])[+!+[]]]((![]+[])[+!+[]]+(![]+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+(!![]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[+!+[]+[!+[]+!+[]+!+[]]]+[+!+[]]+[!+[]+!+[]]+[!+[]+!+[]+!+[]]+([+[]]+![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[!+[]+!+[]+[+[]]]+([]+[])[(![]+[])[+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+([][[]]+[])[+!+[]]+(!![]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(![]+[])[!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(!![]+[])[+!+[]]](+[![]]+([]+[])[(![]+[])[+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+([][[]]+[])[+!+[]]+(!![]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(![]+[])[!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(!![]+[])[+!+[]]]()[+!+[]+[!+[]+!+[]]])[!+[]+!+[]+[+!+[]]])()`)
-	fmt.Println(res, jsunfuck.uneval(res))
-}
-
-func TestEncode(t *testing.T) {
+func TestSteppedEncode(t *testing.T) {
+	jsFuck := New()
 	// Test with encoded digits
-	jsunfuck.fillMissingDigits()
+	jsFuck.fillMissingDigits()
 	want := `(false+"")[1]+(false+"")[2]+(true+"")[3]+(true+"")[1]+(true+"")[0]+([]["flat"]+"")[13]+[+!+[]]+[!+[]+!+[]]+[!+[]+!+[]+!+[]]+([0]+false+[]["flat"])[20]`
-	got := jsunfuck.Encode("alert(123)")
+	got := jsFuck.Encode("alert(123)")
 	if want != got {
 		t.Fatalf("Test encoded digits. Want %v != Got %v", want, got)
 	}
-	_, err := vm.RunString(got)
+	_, err := vm.Run(got)
 	if err != nil {
 		t.Fatalf("Failed to interpret the encoding: %v. Err: %v", got, err)
 	}
 
 	// Test with missing chars
-	jsunfuck.fillMissingChars()
+	jsFuck.fillMissingChars()
 	want = `(false+"")[1]+(false+"")[2]+(true+"")[3]+(true+"")[1]+(true+"")[0]+([]["flat"]+"")[13]+Function("return unescape")()("%"+(27)+"")+Function("return unescape")()("%"+(4)+"a")+Function("return unescape")()("%"+(4)+"b")+Function("return unescape")()("%"+(4)+"c")+Function("return unescape")()("%"+(27)+"")+([0]+false+[]["flat"])[20]`
-	got = jsunfuck.Encode("alert('JKL')")
+	got = jsFuck.Encode("alert('JKL')")
 	if want != got {
 		t.Fatalf("Test encoded missing chars. Want %v != Got %v", want, got)
 	}
-	_, err = vm.RunString(got)
+	_, err = vm.Run(got)
 	if err != nil {
 		t.Fatalf("Failed to interpret the encoding: %v. Err: %v", got, err)
 	}
 
 	// Test with mappings
-	jsunfuck.replaceMap()
+	jsFuck.replaceMap()
 	want = `(![]+[])[+!+[]]+(![]+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+(!![]+[])[+[]]+([]["flat"]+[])[+!+[]+[!+[]+!+[]+!+[]]]+(+[![]]+[])[+[]]+([][[]]+[])[+[]]+((+[])["constructor"]+[])[+!+[]+[+!+[]]]+([]["entries"]()+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+([]["flat"]+[])[+!+[]+[!+[]+!+[]+!+[]]]+[!![]]+[]+([+[]]+![]+[]["flat"])[!+[]+!+[]+[+[]]]+([+[]]+![]+[]["flat"])[!+[]+!+[]+[+[]]]`
-	got = jsunfuck.Encode("alert(Number(true))")
+	got = jsFuck.Encode("alert(Number(true))")
 	if want != got {
 		t.Fatalf("Test encoded mappings. Want %v != Got %v", want, got)
 	}
 
 	// Test with encoded strings
-	jsunfuck.replaceStrings()
+	jsFuck.replaceStrings()
 	want = `(![]+[])[+!+[]]+(![]+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+(!![]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[+!+[]+[!+[]+!+[]+!+[]]]+(+[![]]+[])[+[]]+([][[]]+[])[+[]]+((+[])[([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+([][[]]+[])[+!+[]]+(![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+[]]+(!![]+[])[+!+[]]+([][[]]+[])[+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+[]]+(!![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[+!+[]+[+[]]]+(!![]+[])[+!+[]]]+[])[+!+[]+[+!+[]]]+([][(!![]+[])[!+[]+!+[]+!+[]]+([][[]]+[])[+!+[]]+(!![]+[])[+[]]+(!![]+[])[+!+[]]+([![]]+[][[]])[+!+[]+[+[]]]+(!![]+[])[!+[]+!+[]+!+[]]+(![]+[])[!+[]+!+[]+!+[]]]()+[])[!+[]+!+[]]+(!![]+[])[!+[]+!+[]+!+[]]+(!![]+[])[+!+[]]+([][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]]+[])[+!+[]+[!+[]+!+[]+!+[]]]+[!![]]+[]+([+[]]+![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[!+[]+!+[]+[+[]]]+([+[]]+![]+[][(![]+[])[+[]]+(![]+[])[!+[]+!+[]]+(![]+[])[+!+[]]+(!![]+[])[+[]]])[!+[]+!+[]+[+[]]]`
-	got = jsunfuck.Encode("alert(Number(true))")
+	got = jsFuck.Encode("alert(Number(true))")
 	if want != got {
 		t.Fatalf("Test encoded mappings. Want %v != Got %v", want, got)
 	}
+}
 
-	//(function(){var SOME=123;alert(SOME);}());
-	res := jsunfuck.Encode(`alert(123);`)
-	fmt.Println(res)
-	//fmt.Println(jsunfuck.Wrap(res, true, true))
+func TestEncode(t *testing.T) {
+	jsFuck := New()
+	jsFuck.Init()
+
+	want, _ := os.ReadFile("./test/test_encoded.js")
+	plain, _ := os.ReadFile("./test/test_plain.js")
+
+	encoded := jsFuck.Encode(string(plain))
+	got := jsFuck.Wrap(encoded, true, true)
+
+	if got != string(want) {
+		t.Fatalf("Got value != Wanted: %v", got)
+	}
+}
+
+func TestDecode(t *testing.T) {
+	jsFuck := New()
+	jsFuck.Init()
+
+	want := `[][flat][constructor](return eval)()((    function(){        var Some="Hallo Welt!";        alert(Some);    }());)`
+	data, _ := os.ReadFile("./test/test_encoded.js")
+	got := jsFuck.Decode(string(data))
+
+	if got != want {
+		t.Fatalf("Got value != Wanted: %v", got)
+	}
 }

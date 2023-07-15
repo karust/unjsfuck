@@ -27,7 +27,7 @@ var (
 		`Object`:   `[]["entries"]()`,
 	}
 
-	MAPPING = map[string]string{
+	DEFAULT_MAPPING = map[string]string{
 		`a`: `(false+"")[1]`,
 		`b`: `([]["entries"]()+"")[2]`,
 		`c`: `([]["flat"]+"")[3]`,
