@@ -1,5 +1,5 @@
 # UnJSFuck
-[![Go Report Card](https://goreportcard.com/badge/github.com/karust/openserp)](https://goreportcard.com/report/github.com/karust/openserp)
+[![Go Report Card](https://goreportcard.com/badge/github.com/karust/unjsfuck)](https://goreportcard.com/report/github.com/karust/unjsfuck)
 <a href="https://github.com/karust/unjsfuck/actions"><img src="https://github.com/karust/unjsfuck/actions/workflows/build_tests.yml/badge.svg"/></a>
 [![codecov](https://codecov.io/gh/karust/unjsfuck/branch/main/graph/badge.svg?token=WJRP98YJCW)](https://codecov.io/gh/karust/unjsfuck)
 
@@ -42,7 +42,7 @@ yourEncodedJS := "..."
 
 jsFuck := New()
 jsFuck.Init()
-fmt.Println(jFuck.Decode(yourEncodedJS))
+fmt.Println(jsFuck.Decode(yourEncodedJS))
 ```
 ### Encode
 ```go

@@ -79,6 +79,7 @@ func (jsFck *JSFuck) fillMissingChars() {
 // found in CONSTRUCTORS and SIMPLE, as well as using digitalReplacer and
 // numberReplacer to replace numeric values
 func (jsFck *JSFuck) replaceMap() {
+	digitRegexp := regexp.MustCompile(`\d`)
 
 	// Replaces found patterns in value with replacement
 	replace := func(pattern, replacement, value string) string {
@@ -88,8 +89,7 @@ func (jsFck *JSFuck) replaceMap() {
 
 	// Replace found digit with encoded one
 	digitReplacer := func(x string) string {
-		re := regexp.MustCompile(`\d`)
-		return jsFck.MAPPING[re.FindString(x)]
+		return jsFck.MAPPING[digitRegexp.FindString(x)]
 	}
 
 	// Split number digits and encode
@@ -100,9 +100,7 @@ func (jsFck *JSFuck) replaceMap() {
 		// ?Keep implementation as in JSfuck
 		encoded := jsFck.encodeDigit(firstDigit)
 		concatenated := strings.Join(append([]string{encoded}, digits[1:]...), "+")
-
-		re := regexp.MustCompile(`\d`)
-		return re.ReplaceAllStringFunc(concatenated, digitReplacer)
+		return digitRegexp.ReplaceAllStringFunc(concatenated, digitReplacer)
 	}
 
 	// For every declared char
@@ -133,13 +131,13 @@ func (jsFck *JSFuck) replaceMap() {
 		}
 
 		// Replace all numbers and digits
-		re := regexp.MustCompile(`(\d\d+)`)
+		re := regexp.MustCompile(`\d\d+`)
 		value = re.ReplaceAllStringFunc(value, numberReplacer)
 
-		re = regexp.MustCompile(`\((\d)\)`)
+		re = regexp.MustCompile(`\(\d\)`)
 		value = re.ReplaceAllStringFunc(value, digitReplacer)
 
-		re = regexp.MustCompile(`\[(\d)\]`)
+		re = regexp.MustCompile(`\[\d\]`)
 		value = re.ReplaceAllStringFunc(value, digitReplacer)
 
 		// Replace GLOBAL and empty quotes
@@ -153,6 +151,9 @@ func (jsFck *JSFuck) replaceMap() {
 
 // Replaces strings added in `replaceMap` with encoded there values
 func (jsFck *JSFuck) replaceStrings() {
+	quotesRegexp := regexp.MustCompile(`\"[^\"]+\"`)
+	findNonEncodedRegexp := regexp.MustCompile(`[^\[\]\(\)\!\+]`)
+
 	// Split characters to correctly encode later
 	mappingReplacer := func(b string) string {
 		b = b[1 : len(b)-1] // Remove quotes, can't get groups here
@@ -162,12 +163,8 @@ func (jsFck *JSFuck) replaceStrings() {
 
 	// Replace content between quotes
 	for key, value := range jsFck.MAPPING {
-		re := regexp.MustCompile(`\"([^\"]+)\"`)
-		jsFck.MAPPING[key] = re.ReplaceAllStringFunc(value, mappingReplacer)
+		jsFck.MAPPING[key] = quotesRegexp.ReplaceAllStringFunc(value, mappingReplacer)
 	}
-
-	pattern := `[^\[\]\(\)\!\+]`
-	findNonEncodedRegexp := regexp.MustCompile(pattern)
 
 	missing := make(map[string]string)
 	valueReplacer := func(c string) string {
@@ -233,7 +230,7 @@ func (jsFck *JSFuck) Decode(js string) string {
 	js = strings.ReplaceAll(js, "++", "+")
 
 	// check to see if source js is eval`d
-	if strings.Contains(js, `[][fill][constructor]`) {
+	if strings.Contains(js, `[][flat][constructor]`) {
 		js = jsFck.uneval(js)
 	}
 
@@ -265,7 +262,7 @@ func (jsFck *JSFuck) Encode(js string) string {
 			} else {
 				replacement = fmt.Sprintf(
 					"([]+[])[%v][%v](%v)",
-					jsFck.Encode("constructor"), jsFck.Encode("fromCharCode"), jsFck.Encode(fmt.Sprintf("%c", c[0])),
+					jsFck.Encode("constructor"), jsFck.Encode("fromCharCode"), jsFck.Encode(string(c[0])),
 				)
 
 				output = append(output, replacement)

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,7 +26,7 @@ func TestFillMissingDigits(t *testing.T) {
 	jsFuck.fillMissingDigits()
 
 	for i := 0; i <= 9; i++ {
-		want := fmt.Sprintf("%d", i)
+		want := strconv.Itoa(i)
 
 		encoding, ok := jsFuck.MAPPING[want]
 		if !ok {
@@ -38,7 +38,7 @@ func TestFillMissingDigits(t *testing.T) {
 			t.Fatalf("Failed to interpret the encoding: %v", err)
 		}
 
-		got := fmt.Sprintf("%v", result)
+		got, _ := result.ToString()
 		if got != want {
 			t.Fatalf("Wanted value '%v' mismatched to the resulted one '%v'", want, got)
 		}
@@ -109,23 +109,6 @@ func TestReplaceStrings(t *testing.T) {
 	}
 }
 
-// Cannot execute encoded values in VM
-// func TestInitMapChars(t *testing.T) {
-// 	jsFuck := New()
-// 	jsFuck.Init()
-
-// 	for want, v := range jsFuck.MAPPING {
-// 		got, err := vm.Run(v)
-// 		if err != nil {
-// 			t.Fatalf("Failed to interpret `%v` char encoding %v. Err: %v", want, v, err)
-// 		}
-
-// 		if got.String() != want {
-// 			t.Fatalf("Got %v != Want %v. Err: %v", got, want, err)
-// 		}
-// 	}
-// }
-
 func TestSteppedEncode(t *testing.T) {
 	jsFuck := New()
 	// Test with encoded digits
@@ -177,10 +160,10 @@ func TestEncode(t *testing.T) {
 	plain, _ := os.ReadFile("./test/test_plain.js")
 
 	encoded := jsFuck.Encode(string(plain))
-	got := jsFuck.Wrap(encoded, true, true)
+	got := jsFuck.Wrap(encoded, true, false)
 
 	if got != string(want) {
-		t.Fatalf("Got value != Wanted: %v", got)
+		t.Fatalf("Wanted value != Got: %v", got)
 	}
 }
 
@@ -188,11 +171,11 @@ func TestDecode(t *testing.T) {
 	jsFuck := New()
 	jsFuck.Init()
 
-	want := `[][flat][constructor](return eval)()((    function(){        var Some="Hallo Welt!";        alert(Some);    }());)`
+	want := `(    function(){        var Some="Hallo Welt!";        alert(Some);    }());`
 	data, _ := os.ReadFile("./test/test_encoded.js")
 	got := jsFuck.Decode(string(data))
 
 	if got != want {
-		t.Fatalf("Got value != Wanted: %v", got)
+		t.Fatalf("Wanted value: `%v` != Got: `%v`", want, got)
 	}
 }
